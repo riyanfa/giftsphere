@@ -126,6 +126,13 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'otp_request': '2/min',
+        'otp_verify':'10/min',
+    }
 }
 SPECTACULAR_SETTINGS = {
     'TITLE': 'giftsphere',

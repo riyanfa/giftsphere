@@ -11,4 +11,5 @@ urlpatterns = [
 
     # Data URLs
     path('api/products/', views.get_products),
+    path('api/wishlist',views.get_wishlist),
 ]

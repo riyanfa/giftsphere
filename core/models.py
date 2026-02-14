@@ -7,6 +7,8 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone_number = models.CharField(max_length=15, unique=True)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
+    otp_attempts=models.IntegerField(default=0)
+    otp_created_at=models.DateTimeField(null=True,blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)  # Added for UI
 
     def __str__(self):
@@ -79,7 +81,6 @@ class Wishlist(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     # 3. Link to Products (Wishlist has many Products)
-    # We use ManyToMany because one product can be in many people's wishlists
     products = models.ManyToManyField(Product, related_name='wishlisted_by', blank=True)
     shared =models.ManyToManyField(User,related_name="shared_wishlists",blank=True)
 def __str__(self):

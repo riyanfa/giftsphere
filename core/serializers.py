@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
 from .models import Product, GroupGift, Wishlist
 
 
@@ -15,8 +14,10 @@ class GroupGiftSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupGift
         fields = '__all__'
+
 class WishlistSerializer(serializers.ModelSerializer):
+    shared = ProductSerializer(many=True,read_only=True,allow_null=True)
+    #products = UserSerializer(many=True,read_only=True,allow_null=True)
     class Meta:
         model=Wishlist
-        fields='__all__'
-        depth=1
+        fields = ['id', 'user', 'title', 'created_at', 'products', 'shared']
