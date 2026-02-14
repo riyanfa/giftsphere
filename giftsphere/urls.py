@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 from core import views
+from core.views import get_current_user
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -12,4 +13,7 @@ urlpatterns = [
     # Data URLs
     path('api/products/', views.get_products),
     path('api/wishlist',views.get_wishlist),
+
+    #Session URL
+    path('api/me/', get_current_user),
 ]

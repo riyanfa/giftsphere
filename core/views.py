@@ -12,7 +12,7 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from giftsphere import settings
 from .models import *
-from .serializers import ProductSerializer, WishlistSerializer
+from .serializers import ProductSerializer, WishlistSerializer, UserMeSerializer
 
 
 @api_view(['POST'])
@@ -99,4 +99,10 @@ def get_products(request):
 def get_wishlist(request):
     wishlist = Wishlist.objects.get(user=request.user or Wishlist.user.shared_wishlists.contains(request.user))
     serializer = WishlistSerializer(wishlist, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_current_user(request):
+    serializer = UserMeSerializer(request.user)
     return Response(serializer.data)

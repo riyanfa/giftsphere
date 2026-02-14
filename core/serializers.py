@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Product, GroupGift, Wishlist
+from .models import Product, GroupGift, Wishlist, Profile
+from django.contrib.auth.models import User
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -21,3 +22,11 @@ class WishlistSerializer(serializers.ModelSerializer):
     class Meta:
         model=Wishlist
         fields = ['id', 'user', 'title', 'created_at', 'products', 'shared']
+
+class UserMeSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(source="profile.phone_number")
+    avatar = serializers.ImageField(source="profile.avatar")
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "phone_number", "avatar"]
