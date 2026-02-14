@@ -17,10 +17,10 @@ def seed():
 
     print("1. Creating Users...")
     users_data = [
-        {"username": "0551112222", "name": "Ahmed"},
-        {"username": "0553334444", "name": "Sarah"},
-        {"username": "0555556666", "name": "Khalid"},
-        {"username": "0557778888", "name": "Noura"},
+        {"username": "551112222", "name": "Ahmed"},
+        {"username": "553334444", "name": "Sarah"},
+        {"username": "555556666", "name": "Khalid"},
+        {"username": "557778888", "name": "Noura"},
     ]
 
     db_users = []

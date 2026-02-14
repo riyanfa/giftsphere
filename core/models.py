@@ -82,6 +82,6 @@ class Wishlist(models.Model):
 
     # 3. Link to Products (Wishlist has many Products)
     products = models.ManyToManyField(Product, related_name='wishlisted_by', blank=True)
-    shared =models.ManyToManyField(User,related_name="shared_wishlists",blank=True)
+    shared = models.ManyToManyField(User,related_name="shared_wishlists",blank=True)
 def __str__(self):
     return f"{self.user.username} paid {self.amount}"
