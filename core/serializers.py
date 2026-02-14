@@ -10,9 +10,10 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     phone_number = serializers.ReadOnlyField(source='profile.phone_number')
+    avatar = serializers.ImageField(source="profile.avatar")
     class Meta:
         model = User
-        fields = ['id','first_name','last_name','phone_number']
+        fields = ['id','first_name','last_name','phone_number','avatar']
 class GroupGiftSerializer(serializers.ModelSerializer):
     organizer_name = serializers.ReadOnlyField(source='organizer.username')
 

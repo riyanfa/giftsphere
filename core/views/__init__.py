@@ -1,3 +1,6 @@
-from . import auth
-from . import wishlists
-from . import products
+# core/views/__init__.py
+from .auth import request_otp, verify_otp
+from .products import get_products
+from .wishlists import get_wishlist, delete_wishlist
+from .util_views import get_current_user, set_full_name
+
