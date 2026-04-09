@@ -1,3 +1,6 @@
 Django==6.0.2
 djangorestframework==3.16.1
 python-dotenv==1.2.1
+django-cors-headers
+drf-spectacular
+Pillow

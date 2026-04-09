@@ -19,10 +19,10 @@ from ..models import *
 @throttle_classes([ScopedRateThrottle])
 def request_otp(request):
     phone = request.data.get('phone')
-    if not (phone.startswith('5') and len(phone) == 9):
-        return Response({"error":"Wrong phone number"},status=HTTP_400_BAD_REQUEST)
     if not phone:
         return Response({"error": "Phone number is required"}, status=HTTP_400_BAD_REQUEST)
+    if not (phone.startswith('5') and len(phone) == 9):
+        return Response({"error":"Wrong phone number"},status=HTTP_400_BAD_REQUEST)
 
     user, _ = User.objects.get_or_create(username=phone)
 
@@ -54,15 +54,15 @@ def verify_otp(request):
         return Response({"error": "Phone and OTP required"}, status=HTTP_400_BAD_REQUEST)
 
     try:
-        user = User.objects.get(username=phone)
-        profile = Profile.objects.get(user=user)
-    except User.DoesNotExist:
+        profile = Profile.objects.select_related('user').get(phone_number=phone)
+        user = profile.user
+    except Profile.DoesNotExist:
         return Response({"error": "User not found"}, status=HTTP_400_BAD_REQUEST)
 
     if not profile.otp_code:
         return Response({"error": "No OTP requested"}, status=HTTP_400_BAD_REQUEST)
 
-    if timezone.now() - profile.otp_created_at > timedelta(minutes=5):
+    if not profile.otp_created_at or timezone.now() - profile.otp_created_at > timedelta(minutes=5):
         return Response({"error": "OTP expired"}, status=HTTP_400_BAD_REQUEST)
     if profile.otp_attempts >= 3:
         profile.otp_code = None

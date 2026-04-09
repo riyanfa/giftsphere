@@ -1,8 +1,10 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import IsAuthenticated
+
 from ..models import *
 from ..serializers import ProductSerializer
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

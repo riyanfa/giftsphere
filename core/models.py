@@ -5,10 +5,10 @@ from django.contrib.auth.models import User
 # 1. USER PROFILE (OTP & Phone)
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    phone_number = models.CharField(max_length=15, unique=True)
+    phone_number = models.CharField(max_length=15, unique=True,db_index=True)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
-    otp_attempts=models.IntegerField(default=0)
-    otp_created_at=models.DateTimeField(null=True,blank=True)
+    otp_attempts = models.IntegerField(default=0)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)  # Added for UI
 
     def __str__(self):
@@ -71,17 +71,18 @@ class Pledge(models.Model):
 
     def __str__(self):
         return f"{self.user.username} paid {self.amount}"
-class Wishlist(models.Model):
-    VISIBILITY_CHOICES = [('PRIVATE', 'Private'), ('PUBLIC', 'Public'),('SHARED','Shared')]
-    # 1. Link to User (User has many Wishlists)
-    user = models.ForeignKey(User, related_name='wishlists', on_delete=models.CASCADE)
 
-    # 2. Basic Info
+
+class Wishlist(models.Model):
+    VISIBILITY_CHOICES = [('PRIVATE', 'Private'), ('PUBLIC', 'Public'), ('SHARED', 'Shared')]
+    user = models.ForeignKey(User, related_name='wishlists', on_delete=models.CASCADE)
     title = models.CharField(max_length=100, default="My Wishlist")
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PRIVATE')
     created_at = models.DateTimeField(auto_now_add=True)
 
     # 3. Link to Products (Wishlist has many Products)
     products = models.ManyToManyField(Product, related_name='wishlisted_by', blank=True)
-    shared = models.ManyToManyField(User,related_name="shared_wishlists",blank=True)
-def __str__(self):
-    return f"{self.user.username} paid {self.amount}"
+    shared = models.ManyToManyField(User, related_name="shared_wishlists", blank=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Wishlist: {self.title}"
