@@ -86,3 +86,38 @@ class Wishlist(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Wishlist: {self.title}"
+
+
+class SecretGiftExchange(models.Model):
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('ACTIVE', 'Active'),
+        ('COMPLETED', 'Completed')
+    ]
+
+    organizer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='organized_exchanges')
+    title = models.CharField(max_length=200)
+
+    participants = models.ManyToManyField(User, related_name='gift_exchanges')
+
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    draw_date = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.title
+
+
+class GiftAssignment(models.Model):
+    exchange = models.ForeignKey(SecretGiftExchange, related_name='assignments', on_delete=models.CASCADE)
+
+    giver = models.ForeignKey(User, related_name='giving_assignments', on_delete=models.CASCADE)
+    receiver = models.ForeignKey(User, related_name='receiving_assignments', on_delete=models.CASCADE)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('exchange', 'giver')
+
+    def __str__(self):
+        return f"{self.giver} → {self.receiver}"

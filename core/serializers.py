@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Product, GroupGift, Wishlist
+from .models import Product, GroupGift, Wishlist,SecretGiftExchange,GiftAssignment
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -37,3 +37,31 @@ class WishlistSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wishlist
         fields = ['id', 'user', 'title', 'visibility', 'created_at', 'products', 'shared']
+
+
+class SecretGiftExchangeSerializer(serializers.ModelSerializer):
+    participants = serializers.PrimaryKeyRelatedField(
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+        model = SecretGiftExchange
+        fields = [
+            'id',
+            'title',
+            'organizer',
+            'participants',
+            'status',
+            'created_at',
+            'draw_date'
+        ]
+        read_only_fields = ['organizer', 'status']
+
+class GiftAssignmentSerializer(serializers.ModelSerializer):
+    giver = serializers.StringRelatedField()
+    receiver = serializers.StringRelatedField()
+
+    class Meta:
+        model = GiftAssignment
+        fields = '__all__'
