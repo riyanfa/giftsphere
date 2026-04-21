@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'core',
     'drf_spectacular',
+    "fcm_django"
 ]
 
 MIDDLEWARE = [
@@ -56,6 +57,15 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+FCM_DJANGO_SETTINGS = {
+    "DEFAULT_FIREBASE_APP": None,
+    "APP_VERBOSE_NAME": "FCM Django",
+    # Only one active device per user (set True if preferred)
+    "ONE_DEVICE_PER_USER": False,
+    # Automatically remove tokens FCM rejects (uninstalled apps, expired tokens)
+    "DELETE_INACTIVE_DEVICES": True,
+}
 
 ROOT_URLCONF = "giftsphere.urls"
 

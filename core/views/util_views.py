@@ -38,13 +38,11 @@ def send_contacts(request):
             status=HTTP_400_BAD_REQUEST
         )
 
-    # 2. Use __in to check if the phone_number exists in the provided list
-    # Use .values_list to get only the numbers that exist
+    # Use __in to check if the phone_number exists in the provided list
     existing_numbers = Profile.objects.filter(
         phone_number__in=contact_list
     ).values_list('phone_number', flat=True)
 
-    # 3. Return the list of matches
     return Response({
         "existing_contacts": list(existing_numbers)
     }, status=HTTP_200_OK)

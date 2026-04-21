@@ -42,9 +42,18 @@ class Product(models.Model):
 
 # 4. GROUP GIFT (The Event)
 class GroupGift(models.Model):
-    STATUS_CHOICES = [('ACTIVE', 'Active'), ('COMPLETED', 'Completed')]
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active'),
+        ('COMPLETED', 'Completed'),
+        ('CANCELLED', 'Cancelled'),
+    ]
 
     organizer = models.ForeignKey(User, related_name='organized_gifts', on_delete=models.CASCADE)
+    # Who the gift is actually for (the birthday person, the graduate, etc.)
+    recipient = models.ForeignKey(
+        User, related_name='received_gifts',
+        on_delete=models.SET_NULL, null=True, blank=True
+    )
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
 
@@ -52,6 +61,7 @@ class GroupGift(models.Model):
     collected_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    deadline = models.DateTimeField(null=True, blank=True)  # "3 days left" for the Flutter UI
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -68,6 +78,9 @@ class Pledge(models.Model):
     # Optional: Message ("Happy Birthday!")
     message = models.TextField(blank=True, null=True)
 
+    class Meta:
+        # One pledge per user per Qattah — mirrors the unique_together on GiftAssignment
+        unique_together = ('group_gift', 'user')
 
     def __str__(self):
         return f"{self.user.username} paid {self.amount}"

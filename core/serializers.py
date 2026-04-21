@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Product, GroupGift, Wishlist,SecretGiftExchange,GiftAssignment
+from .models import Product, GroupGift, Pledge, Wishlist, SecretGiftExchange, GiftAssignment
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -21,14 +21,61 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_avatar(self, obj):
         if hasattr(obj, 'profile') and obj.profile.avatar:
-            return obj.profile.avatar.url
+            request = self.context.get('request')
+            url = obj.profile.avatar.url
+            if request:
+                return request.build_absolute_uri(url)
+            return url  # fallback: relative path
         return None
+class PledgeSerializer(serializers.ModelSerializer):
+    """Serializer for individual pledges inside a Qattah."""
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Pledge
+        fields = ['id', 'user', 'amount', 'message', 'timestamp']
+        read_only_fields = ['user', 'timestamp']
+
+
 class GroupGiftSerializer(serializers.ModelSerializer):
-    organizer_name = serializers.ReadOnlyField(source='organizer.username')
+    """Full Qattah serializer — includes progress metrics and nested data."""
+    organizer = UserSerializer(read_only=True)
+    recipient = UserSerializer(read_only=True)
+    recipient_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), source='recipient',
+        write_only=True, required=False, allow_null=True
+    )
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), source='product', write_only=True
+    )
+    pledges = PledgeSerializer(many=True, read_only=True)
+    remaining_amount = serializers.SerializerMethodField()
+    days_left = serializers.SerializerMethodField()
 
     class Meta:
         model = GroupGift
-        fields = '__all__'
+        fields = [
+            'id', 'title',
+            'organizer',
+            'recipient', 'recipient_id',
+            'product', 'product_id',
+            'target_amount', 'collected_amount', 'remaining_amount',
+            'status', 'deadline', 'days_left',
+            'created_at', 'pledges',
+        ]
+        read_only_fields = ['organizer', 'collected_amount', 'status', 'created_at']
+
+    def get_remaining_amount(self, obj):
+        return max(obj.target_amount - obj.collected_amount, 0)
+
+    def get_days_left(self, obj):
+        """Returns whole days remaining until deadline, or None if no deadline set."""
+        if not obj.deadline:
+            return None
+        from django.utils import timezone
+        delta = obj.deadline - timezone.now()
+        return max(delta.days, 0)
 
 class WishlistSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)  # The Owner
@@ -40,10 +87,8 @@ class WishlistSerializer(serializers.ModelSerializer):
 
 
 class SecretGiftExchangeSerializer(serializers.ModelSerializer):
-    participants = serializers.PrimaryKeyRelatedField(
-        many=True,
-        read_only=True
-    )
+    organizer = UserSerializer(read_only=True)
+    participants = UserSerializer(many=True, read_only=True)
 
     class Meta:
         model = SecretGiftExchange

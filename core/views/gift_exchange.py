@@ -1,12 +1,71 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.contrib.auth.models import User
-
 from ..models import SecretGiftExchange, GiftAssignment
 from ..serializers import SecretGiftExchangeSerializer, GiftAssignmentSerializer
+from ..notifications import notify_draw_completed
 
 import random
+
+
+# ---------------------------------------------------------------------------
+# LIST — all exchanges the current user is part of
+#   GET /exchange/
+# ---------------------------------------------------------------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_exchanges(request):
+    """
+    Returns every SecretGiftExchange where the current user is a participant
+    (including ones they organised), ordered newest first.
+    """
+    exchanges = (
+        SecretGiftExchange.objects
+        .filter(participants=request.user)
+        .prefetch_related('participants', 'participants__profile')
+        .select_related('organizer', 'organizer__profile')
+        .order_by('-created_at')
+    )
+    serializer = SecretGiftExchangeSerializer(exchanges, many=True)
+    return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# DETAIL — single exchange with full participant list and assignments
+#   GET /exchange/<id>/
+# ---------------------------------------------------------------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def exchange_detail(request, exchange_id):
+    """
+    Returns full exchange info. Only participants can view.
+    If the draw has been done, also returns the current user's assignment.
+    """
+    try:
+        exchange = (
+            SecretGiftExchange.objects
+            .prefetch_related('participants', 'participants__profile')
+            .select_related('organizer', 'organizer__profile')
+            .get(id=exchange_id)
+        )
+    except SecretGiftExchange.DoesNotExist:
+        return Response({'error': 'Exchange not found.'}, status=404)
+
+    if not exchange.participants.filter(id=request.user.id).exists():
+        return Response({'error': 'You are not a participant in this exchange.'}, status=403)
+
+    data = SecretGiftExchangeSerializer(exchange).data
+
+    # Attach the current user's assignment if the draw has been done
+    try:
+        assignment = GiftAssignment.objects.select_related(
+            'receiver', 'receiver__profile'
+        ).get(exchange=exchange, giver=request.user)
+        data['my_assignment'] = GiftAssignmentSerializer(assignment).data
+    except GiftAssignment.DoesNotExist:
+        data['my_assignment'] = None
+
+    return Response(data)
 
 
 @api_view(['POST'])
@@ -71,6 +130,9 @@ def draw_assignments(request, exchange_id):
 
     exchange.status = 'ACTIVE'
     exchange.save()
+
+    # Notify all participants that the draw is done
+    notify_draw_completed(exchange)
 
     return Response({"message": "Assignments generated"})
 
