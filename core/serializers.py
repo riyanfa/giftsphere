@@ -49,6 +49,7 @@ class GroupGiftSerializer(serializers.ModelSerializer):
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), source='product', write_only=True
     )
+    participants = UserSerializer(many=True, read_only=True)
     pledges = PledgeSerializer(many=True, read_only=True)
     remaining_amount = serializers.SerializerMethodField()
     days_left = serializers.SerializerMethodField()
@@ -57,14 +58,15 @@ class GroupGiftSerializer(serializers.ModelSerializer):
         model = GroupGift
         fields = [
             'id', 'title',
+            'invite_code',
             'organizer',
             'recipient', 'recipient_id',
             'product', 'product_id',
             'target_amount', 'collected_amount', 'remaining_amount',
             'status', 'deadline', 'days_left',
-            'created_at', 'pledges',
+            'created_at', 'participants', 'pledges',
         ]
-        read_only_fields = ['organizer', 'collected_amount', 'status', 'created_at']
+        read_only_fields = ['invite_code', 'organizer', 'collected_amount', 'status', 'created_at']
 
     def get_remaining_amount(self, obj):
         return max(obj.target_amount - obj.collected_amount, 0)
@@ -95,6 +97,7 @@ class SecretGiftExchangeSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'title',
+            'invite_code',
             'organizer',
             'participants',
             'status',
@@ -102,7 +105,7 @@ class SecretGiftExchangeSerializer(serializers.ModelSerializer):
             'draw_date',
             'budget'
         ]
-        read_only_fields = ['organizer', 'status']
+        read_only_fields = ['invite_code', 'organizer', 'status']
 
 class GiftAssignmentSerializer(serializers.ModelSerializer):
     giver = serializers.StringRelatedField()

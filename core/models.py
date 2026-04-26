@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils.crypto import get_random_string
 
 
 # 1. USER PROFILE (OTP & Phone)
@@ -39,6 +40,8 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+def generate_numeric_code():
+    return get_random_string(length=8, allowed_chars='0123456789')
 
 # 4. GROUP GIFT (The Event)
 class GroupGift(models.Model):
@@ -63,6 +66,8 @@ class GroupGift(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     deadline = models.DateTimeField(null=True, blank=True)  # "3 days left" for the Flutter UI
     created_at = models.DateTimeField(auto_now_add=True)
+    invite_code = models.CharField(max_length=8, default=generate_numeric_code, unique=True)
+    participants = models.ManyToManyField(User, related_name='joined_qattahs', blank=True)
 
     def __str__(self):
         return f"{self.title} - {self.status}"
@@ -112,7 +117,7 @@ class SecretGiftExchange(models.Model):
     title = models.CharField(max_length=200)
 
     participants = models.ManyToManyField(User, related_name='gift_exchanges')
-    budget = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    invite_code = models.CharField(max_length=8, default=generate_numeric_code, unique=True)
 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)

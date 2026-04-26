@@ -45,6 +45,7 @@ def create_qattah(request):
         collected_amount=Decimal('0.00'),
         status='ACTIVE',
     )
+    group_gift.participants.add(request.user)
 
     serializer = GroupGiftSerializer(group_gift)
     return Response(serializer.data, status=201)
@@ -61,9 +62,15 @@ def list_qattahs(request):
     mine = request.query_params.get('mine', 'false').lower() == 'true'
 
     if mine:
-        qs = GroupGift.objects.filter(organizer=request.user).order_by('-created_at')
+        qs = GroupGift.objects.filter(organizer=request.user)
     else:
-        qs = GroupGift.objects.filter(status='ACTIVE').order_by('-created_at')
+        qs = GroupGift.objects.filter(status='ACTIVE')
+
+    qs = (
+        qs.select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
+        .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+        .order_by('-created_at')
+    )
 
     serializer = GroupGiftSerializer(qs, many=True)
     return Response(serializer.data)
@@ -77,7 +84,12 @@ def list_qattahs(request):
 @permission_classes([IsAuthenticated])
 def qattah_detail(request, qattah_id):
     try:
-        group_gift = GroupGift.objects.get(id=qattah_id)
+        group_gift = (
+            GroupGift.objects
+            .select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
+            .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+            .get(id=qattah_id)
+        )
     except GroupGift.DoesNotExist:
         return Response({'error': 'Qattah not found.'}, status=404)
 
@@ -86,7 +98,53 @@ def qattah_detail(request, qattah_id):
 
 
 # ---------------------------------------------------------------------------
-# 4. PLEDGE — contribute to a Qattah
+# 4. JOIN — join a Qattah using invite code
+#    POST /qattah/join/
+#    Body: { "invite_code": "12345678" }
+# ---------------------------------------------------------------------------
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def join_qattah(request):
+    invite_code = str(request.data.get('invite_code', '')).strip()
+
+    if not invite_code:
+        return Response({'error': 'invite_code is required.'}, status=400)
+
+    try:
+        group_gift = (
+            GroupGift.objects
+            .select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
+            .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+            .get(invite_code=invite_code)
+        )
+    except GroupGift.DoesNotExist:
+        return Response({'error': 'Invalid invite code.'}, status=404)
+
+    if group_gift.status != 'ACTIVE':
+        return Response({'error': 'This Qattah is not open for joining.'}, status=400)
+
+    if group_gift.participants.filter(id=request.user.id).exists():
+        return Response(
+            {
+                'message': 'You already joined this Qattah.',
+                'qattah': GroupGiftSerializer(group_gift).data,
+            }
+        )
+
+    group_gift.participants.add(request.user)
+    group_gift.refresh_from_db()
+
+    return Response(
+        {
+            'message': 'Joined successfully.',
+            'qattah': GroupGiftSerializer(group_gift).data,
+        },
+        status=200,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 5. PLEDGE — contribute to a Qattah
 #    POST /qattah/<id>/pledge/
 #    Body: { "amount": "50.00", "message": "Happy Birthday!" }
 #
@@ -182,7 +240,7 @@ def make_pledge(request, qattah_id):
 
 
 # ---------------------------------------------------------------------------
-# 5. MY PLEDGES — all pledges the current user has made
+# 6. MY PLEDGES — all pledges the current user has made
 #    GET /qattah/my-pledges/
 # ---------------------------------------------------------------------------
 @api_view(['GET'])

@@ -83,14 +83,42 @@ def create_exchange(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def join_exchange(request, exchange_id):
+def join_exchange(request):
+    invite_code = str(request.data.get('invite_code', '')).strip()
+
+    if not invite_code:
+        return Response({'error': 'invite_code is required.'}, status=400)
+
     try:
-        exchange = SecretGiftExchange.objects.get(id=exchange_id)
+        exchange = (
+            SecretGiftExchange.objects
+            .prefetch_related('participants', 'participants__profile')
+            .select_related('organizer', 'organizer__profile')
+            .get(invite_code=invite_code)
+        )
     except SecretGiftExchange.DoesNotExist:
-        return Response({"error": "Exchange not found"}, status=404)
+        return Response({'error': 'Invalid invite code.'}, status=404)
+
+    if exchange.status == 'COMPLETED':
+        return Response({'error': 'This exchange is closed.'}, status=400)
+
+    if exchange.participants.filter(id=request.user.id).exists():
+        return Response(
+            {
+                'message': 'You already joined this exchange.',
+                'exchange': SecretGiftExchangeSerializer(exchange).data,
+            }
+        )
 
     exchange.participants.add(request.user)
-    return Response({"message": "Joined successfully"})
+    exchange.refresh_from_db()
+
+    return Response(
+        {
+            'message': 'Joined successfully.',
+            'exchange': SecretGiftExchangeSerializer(exchange).data,
+        }
+    )
 
 
 @api_view(['POST'])
