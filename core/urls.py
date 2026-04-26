@@ -32,25 +32,27 @@ urlpatterns = [
     # ── Secret Gift Exchange ──────────────────────────────────────────────────
     # GET  /api/exchange/          my exchanges (list)
     # POST /api/exchange/create/   create new
+    # POST /api/exchange/join/     join by invite code
     # GET  /api/exchange/<id>/     detail + my assignment if drawn
-    # POST /api/exchange/<id>/join/
     # POST /api/exchange/<id>/draw/
     # GET  /api/exchange/<id>/my/  my assignment only
     path('exchange/', views.gift_exchange.list_exchanges, name='exchange-list'),
     path('exchange/create/', views.gift_exchange.create_exchange, name='exchange-create'),
+    path('exchange/join/', views.gift_exchange.join_exchange, name='exchange-join'),
     path('exchange/<int:exchange_id>/', views.gift_exchange.exchange_detail, name='exchange-detail'),
-    path('exchange/<int:exchange_id>/join/', views.gift_exchange.join_exchange, name='exchange-join'),
     path('exchange/<int:exchange_id>/draw/', views.gift_exchange.draw_assignments, name='exchange-draw'),
     path('exchange/<int:exchange_id>/my/', views.gift_exchange.my_assignment, name='exchange-my-assignment'),
 
     # ── Qattah (Collaborative Crowdfunding) ───────────────────────────────────
     # GET  /api/qattah/            active Qattahs (?mine=true for own)
     # POST /api/qattah/create/     start a Qattah
+    # POST /api/qattah/join/       join by invite code
     # GET  /api/qattah/my-pledges/ all my contributions
     # GET  /api/qattah/<id>/       detail
     # POST /api/qattah/<id>/pledge/ submit a pledge
     path('qattah/', views.qattah.list_qattahs, name='qattah-list'),
     path('qattah/create/', views.qattah.create_qattah, name='qattah-create'),
+    path('qattah/join/', views.qattah.join_qattah, name='qattah-join'),
     path('qattah/my-pledges/', views.qattah.my_pledges, name='qattah-my-pledges'),
     path('qattah/<int:qattah_id>/', views.qattah.qattah_detail, name='qattah-detail'),
     path('qattah/<int:qattah_id>/pledge/', views.qattah.make_pledge, name='qattah-pledge'),

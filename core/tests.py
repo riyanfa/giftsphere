@@ -4,8 +4,7 @@ from django.core.cache import cache
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
-from .models import SecretGiftExchange, GiftAssignment
-from .models import Profile
+from .models import Category, Product, GroupGift, SecretGiftExchange, GiftAssignment, Profile
 
 
 class AuthFlowTests(APITestCase):
@@ -151,11 +150,15 @@ class GiftExchangeTests(APITestCase):
         # Organizer
         self._authenticate("512300001")
         create = self.client.post("/api/exchange/create/", {"title": "Test"}, format="json")
-        exchange_id = create.data["id"]
+        invite_code = create.data["invite_code"]
 
         # New user joins
         self._authenticate("512300002")
-        response = self.client.post(f"/api/exchange/{exchange_id}/join/")
+        response = self.client.post(
+            "/api/exchange/join/",
+            {"invite_code": invite_code},
+            format="json",
+        )
 
         self.assertEqual(response.status_code, 200)
 
@@ -171,10 +174,18 @@ class GiftExchangeTests(APITestCase):
 
         # Add participants
         self._authenticate("512300004")
-        self.client.post(f"/api/exchange/{exchange_id}/join/")
+        self.client.post(
+            "/api/exchange/join/",
+            {"invite_code": create.data["invite_code"]},
+            format="json",
+        )
 
         self._authenticate("512300005")
-        self.client.post(f"/api/exchange/{exchange_id}/join/")
+        self.client.post(
+            "/api/exchange/join/",
+            {"invite_code": create.data["invite_code"]},
+            format="json",
+        )
 
         # Back to organizer
         self._authenticate("512300003")
@@ -207,7 +218,11 @@ class GiftExchangeTests(APITestCase):
 
         for phone in phones:
             self._authenticate(phone)
-            self.client.post(f"/api/exchange/{exchange_id}/join/")
+            self.client.post(
+                "/api/exchange/join/",
+                {"invite_code": create.data["invite_code"]},
+                format="json",
+            )
             # Get user info for printing
             user = User.objects.get(username=phone)
             participants_info.append(user)
@@ -228,3 +243,58 @@ class GiftExchangeTests(APITestCase):
         #     self.assertNotEqual(assignment.giver, assignment.receiver)
         # print("-" * 40)
         # print(" No one is assigned to themselves")
+
+
+class QattahJoinTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.category = Category.objects.create(name="Electronics", icon="gift")
+        self.product = Product.objects.create(
+            name="Headphones",
+            category=self.category,
+            price="299.00",
+            description="Wireless headphones",
+            image_url="https://example.com/headphones.jpg",
+            affiliate_link="https://example.com/buy-headphones",
+            store_name="Example Store",
+        )
+
+    def _authenticate(self, phone):
+        request_response = self.client.post(
+            "/api/login/request/",
+            {"phone": phone},
+            format="json",
+        )
+        otp = request_response.data["debug_otp"]
+        verify_response = self.client.post(
+            "/api/login/verify/",
+            {"phone": phone, "otp": otp},
+            format="json",
+        )
+        token = verify_response.data["token"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
+
+    def test_join_qattah_by_invite_code(self):
+        self._authenticate("512399001")
+        create_response = self.client.post(
+            "/api/qattah/create/",
+            {"title": "Birthday Gift", "product_id": self.product.id},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        invite_code = create_response.data["invite_code"]
+        qattah_id = create_response.data["id"]
+
+        self._authenticate("512399002")
+        join_response = self.client.post(
+            "/api/qattah/join/",
+            {"invite_code": invite_code},
+            format="json",
+        )
+
+        self.assertEqual(join_response.status_code, 200)
+        self.assertEqual(join_response.data["message"], "Joined successfully.")
+        self.assertEqual(join_response.data["qattah"]["id"], qattah_id)
+
+        group_gift = GroupGift.objects.get(id=qattah_id)
+        self.assertTrue(group_gift.participants.filter(username="512399002").exists())
