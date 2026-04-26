@@ -99,7 +99,8 @@ class SecretGiftExchangeSerializer(serializers.ModelSerializer):
             'participants',
             'status',
             'created_at',
-            'draw_date'
+            'draw_date',
+            'budget'
         ]
         read_only_fields = ['organizer', 'status']
 
