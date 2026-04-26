@@ -118,6 +118,8 @@ class SecretGiftExchange(models.Model):
 
     participants = models.ManyToManyField(User, related_name='gift_exchanges')
     invite_code = models.CharField(max_length=8, default=generate_numeric_code, unique=True)
+    budget = models.DecimalField(max_digits=8, decimal_places=2, default=100)
+
 
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
