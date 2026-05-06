@@ -7,4 +7,4 @@ from .gift_exchange import (
     create_exchange, join_exchange, draw_assignments, my_assignment,
     list_exchanges, exchange_detail,
 )
-from . import qattah
+from . import notification_views, qattah, reminders

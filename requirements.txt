@@ -4,3 +4,5 @@ python-dotenv==1.2.1
 django-cors-headers
 drf-spectacular
 Pillow
+firebase-admin
+fcm-django

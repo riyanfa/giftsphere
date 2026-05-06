@@ -2,6 +2,38 @@ from fcm_django.models import FCMDevice
 from django.contrib.auth.models import User
 from firebase_admin.messaging import Message, Notification as FCMNotification
 
+from .models import InAppNotification
+
+
+def _normalise_user_pks(users):
+    if isinstance(users, User):
+        return [users.pk]
+
+    user_pks = []
+    for user in users:
+        user_pks.append(user.pk if isinstance(user, User) else user)
+
+    return list(dict.fromkeys(user_pks))
+
+
+def _create_inbox_records(user_pks, title: str, body: str, data: dict = None):
+    try:
+        payload = data or {}
+        notification_type = str(payload.get('type', ''))
+        InAppNotification.objects.bulk_create([
+            InAppNotification(
+                user_id=user_pk,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                data={k: str(v) for k, v in payload.items()},
+            )
+            for user_pk in user_pks
+        ])
+    except Exception:
+        # Notification storage should not crash the main request.
+        pass
+
 
 def _send(users, title: str, body: str, data: dict = None):
     """
@@ -10,14 +42,11 @@ def _send(users, title: str, body: str, data: dict = None):
     Silently no-ops if Firebase isn't initialised or no devices are found.
     """
     try:
-        # Normalise to a list of user PKs
-        if isinstance(users, User):
-            user_pks = [users.pk]
-        else:
-            user_pks = [u.pk if isinstance(u, User) else u for u in users]
-
+        user_pks = _normalise_user_pks(users)
         if not user_pks:
             return
+
+        _create_inbox_records(user_pks, title, body, data)
 
         devices = FCMDevice.objects.filter(user_id__in=user_pks, active=True)
         if not devices.exists():
@@ -70,9 +99,17 @@ def notify_qattah_completed(group_gift):
 
 def notify_draw_completed(exchange):
     """Notifies all participants that the Secret Gift draw has been done."""
-    participant_ids = list(
-        exchange.participants.values_list('id', flat=True)
-    )
+    try:
+        participant_ids = list(
+            exchange.participant_statuses
+            .filter(status='ACCEPTED')
+            .values_list('user_id', flat=True)
+        )
+    except Exception:
+        participant_ids = list(
+            exchange.participants.values_list('id', flat=True)
+        )
+
     _send(
         users=participant_ids,
         title="The draw is done! 🎁",

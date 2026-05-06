@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import GroupGift, Pledge, Product
+from ..models import GroupGift, GroupGiftParticipant, Pledge, Product
 from ..serializers import GroupGiftSerializer, PledgeSerializer
 from ..notifications import notify_pledge_received, notify_qattah_completed
 
@@ -25,6 +25,7 @@ def create_qattah(request):
     """
     product_id = request.data.get('product_id')
     title = request.data.get('title', '').strip()
+    payment_method_note = request.data.get('payment_method_note', '').strip()
 
     if not product_id:
         return Response({'error': 'product_id is required.'}, status=400)
@@ -43,11 +44,16 @@ def create_qattah(request):
         title=title,
         target_amount=product.price,   # Auto-set from product price
         collected_amount=Decimal('0.00'),
+        payment_method_note=payment_method_note,
         status='ACTIVE',
     )
-    group_gift.participants.add(request.user)
+    GroupGiftParticipant.objects.create(
+        group_gift=group_gift,
+        user=request.user,
+        status=GroupGiftParticipant.STATUS_ACCEPTED,
+    )
 
-    serializer = GroupGiftSerializer(group_gift)
+    serializer = GroupGiftSerializer(group_gift, context={'request': request})
     return Response(serializer.data, status=201)
 
 
@@ -68,11 +74,15 @@ def list_qattahs(request):
 
     qs = (
         qs.select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
-        .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+        .prefetch_related(
+            'participants', 'participants__profile',
+            'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+            'pledges', 'pledges__user', 'pledges__user__profile',
+        )
         .order_by('-created_at')
     )
 
-    serializer = GroupGiftSerializer(qs, many=True)
+    serializer = GroupGiftSerializer(qs, many=True, context={'request': request})
     return Response(serializer.data)
 
 
@@ -87,13 +97,17 @@ def qattah_detail(request, qattah_id):
         group_gift = (
             GroupGift.objects
             .select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
-            .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+            .prefetch_related(
+                'participants', 'participants__profile',
+                'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+                'pledges', 'pledges__user', 'pledges__user__profile',
+            )
             .get(id=qattah_id)
         )
     except GroupGift.DoesNotExist:
         return Response({'error': 'Qattah not found.'}, status=404)
 
-    serializer = GroupGiftSerializer(group_gift)
+    serializer = GroupGiftSerializer(group_gift, context={'request': request})
     return Response(serializer.data)
 
 
@@ -114,7 +128,11 @@ def join_qattah(request):
         group_gift = (
             GroupGift.objects
             .select_related('organizer', 'organizer__profile', 'recipient', 'recipient__profile', 'product')
-            .prefetch_related('participants', 'participants__profile', 'pledges', 'pledges__user', 'pledges__user__profile')
+            .prefetch_related(
+                'participants', 'participants__profile',
+                'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+                'pledges', 'pledges__user', 'pledges__user__profile',
+            )
             .get(invite_code=invite_code)
         )
     except GroupGift.DoesNotExist:
@@ -123,23 +141,77 @@ def join_qattah(request):
     if group_gift.status != 'ACTIVE':
         return Response({'error': 'This Qattah is not open for joining.'}, status=400)
 
-    if group_gift.participants.filter(id=request.user.id).exists():
+    participant, created = GroupGiftParticipant.objects.get_or_create(
+        group_gift=group_gift,
+        user=request.user,
+        defaults={'status': GroupGiftParticipant.STATUS_ACCEPTED},
+    )
+
+    if not created and participant.status == GroupGiftParticipant.STATUS_ACCEPTED:
         return Response(
             {
                 'message': 'You already joined this Qattah.',
-                'qattah': GroupGiftSerializer(group_gift).data,
+                'qattah': GroupGiftSerializer(group_gift, context={'request': request}).data,
             }
         )
 
-    group_gift.participants.add(request.user)
+    if not created:
+        participant.status = GroupGiftParticipant.STATUS_ACCEPTED
+        participant.save(update_fields=['status', 'updated_at'])
+
     group_gift.refresh_from_db()
 
     return Response(
         {
             'message': 'Joined successfully.',
-            'qattah': GroupGiftSerializer(group_gift).data,
+            'qattah': GroupGiftSerializer(group_gift, context={'request': request}).data,
         },
         status=200,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_qattah_invitation(request, qattah_id):
+    try:
+        participant = GroupGiftParticipant.objects.select_related('group_gift').get(
+            group_gift_id=qattah_id,
+            user=request.user,
+        )
+    except GroupGiftParticipant.DoesNotExist:
+        return Response({'error': 'Qattah invitation not found.'}, status=404)
+
+    if participant.group_gift.status != 'ACTIVE':
+        return Response({'error': 'This Qattah is not open for joining.'}, status=400)
+
+    participant.status = GroupGiftParticipant.STATUS_ACCEPTED
+    participant.save(update_fields=['status', 'updated_at'])
+    return Response(
+        {
+            'message': 'Qattah invitation accepted.',
+            'qattah': GroupGiftSerializer(participant.group_gift, context={'request': request}).data,
+        }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_qattah_invitation(request, qattah_id):
+    try:
+        participant = GroupGiftParticipant.objects.select_related('group_gift').get(
+            group_gift_id=qattah_id,
+            user=request.user,
+        )
+    except GroupGiftParticipant.DoesNotExist:
+        return Response({'error': 'Qattah invitation not found.'}, status=404)
+
+    participant.status = GroupGiftParticipant.STATUS_REJECTED
+    participant.save(update_fields=['status', 'updated_at'])
+    return Response(
+        {
+            'message': 'Qattah invitation rejected.',
+            'qattah': GroupGiftSerializer(participant.group_gift, context={'request': request}).data,
+        }
     )
 
 
@@ -182,6 +254,20 @@ def make_pledge(request, qattah_id):
             if group_gift.status != 'ACTIVE':
                 return Response({'error': 'This Qattah is already completed.'}, status=400)
 
+            is_accepted_participant = GroupGiftParticipant.objects.filter(
+                group_gift=group_gift,
+                user=request.user,
+                status=GroupGiftParticipant.STATUS_ACCEPTED,
+            ).exists()
+            if not is_accepted_participant:
+                return Response({'error': 'You must join this Qattah before pledging.'}, status=403)
+
+            if Pledge.objects.filter(group_gift=group_gift, user=request.user).exists():
+                return Response(
+                    {'error': 'You have already pledged to this Qattah.'},
+                    status=409,
+                )
+
             remaining = group_gift.target_amount - group_gift.collected_amount
             if amount > remaining:
                 return Response(
@@ -193,11 +279,15 @@ def make_pledge(request, qattah_id):
                 )
 
             message = request.data.get('message', '')
+            pledge_status = request.data.get('status', Pledge.STATUS_PLEDGED)
+            if pledge_status not in {Pledge.STATUS_PLEDGED, Pledge.STATUS_PAID_EXTERNALLY}:
+                return Response({'error': 'Invalid pledge status.'}, status=400)
 
             pledge = Pledge.objects.create(
                 group_gift=group_gift,
                 user=request.user,
                 amount=amount,
+                status=pledge_status,
                 message=message,
             )
 
@@ -219,7 +309,7 @@ def make_pledge(request, qattah_id):
             status=409,
         )
 
-    serializer = GroupGiftSerializer(group_gift)
+    serializer = GroupGiftSerializer(group_gift, context={'request': request})
 
     # ── Fire notifications AFTER the transaction has committed ────────────────
     just_completed = group_gift.status == 'COMPLETED'
@@ -260,6 +350,7 @@ def my_pledges(request):
         {
             'pledge_id': p.id,
             'amount': str(p.amount),
+            'status': p.status,
             'message': p.message,
             'timestamp': p.timestamp,
             'qattah': {

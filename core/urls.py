@@ -18,7 +18,21 @@ urlpatterns = [
     # GET  /api/products/          list (supports ?search= and ?category=)
     # GET  /api/products/<id>/     detail
     path('products/', views.products.get_products, name='product-list'),
+    path('products/collections/', views.products.get_product_collections, name='product-collections'),
+    path('products/featured/', views.products.get_featured_products, name='product-featured'),
     path('products/<int:product_id>/', views.products.get_product_detail, name='product-detail'),
+    path('products/<int:product_id>/affiliate-click/', views.products.record_affiliate_click, name='product-affiliate-click'),
+    path('products/quiz/', views.products.create_quiz_attempt, name='product-quiz'),
+
+    # ── Event Reminders ──────────────────────────────────────────────────────
+    path('reminders/', views.reminders.list_reminders, name='reminder-list'),
+    path('reminders/create/', views.reminders.create_reminder, name='reminder-create'),
+    path('reminders/upcoming/', views.reminders.upcoming_reminders, name='reminder-upcoming'),
+    path('reminders/<int:reminder_id>/', views.reminders.update_delete_reminder, name='reminder-detail'),
+
+    # ── Notification Inbox ───────────────────────────────────────────────────
+    path('notifications/', views.notification_views.list_notifications, name='notification-list'),
+    path('notifications/<int:notification_id>/read/', views.notification_views.mark_notification_read, name='notification-read'),
 
     # ── Wishlist ──────────────────────────────────────────────────────────────
     path('wishlist/', views.wishlists.get_wishlist),
@@ -40,6 +54,8 @@ urlpatterns = [
     path('exchange/create/', views.gift_exchange.create_exchange, name='exchange-create'),
     path('exchange/join/', views.gift_exchange.join_exchange, name='exchange-join'),
     path('exchange/<int:exchange_id>/', views.gift_exchange.exchange_detail, name='exchange-detail'),
+    path('exchange/<int:exchange_id>/accept/', views.gift_exchange.accept_exchange_invitation, name='exchange-accept'),
+    path('exchange/<int:exchange_id>/reject/', views.gift_exchange.reject_exchange_invitation, name='exchange-reject'),
     path('exchange/<int:exchange_id>/draw/', views.gift_exchange.draw_assignments, name='exchange-draw'),
     path('exchange/<int:exchange_id>/my/', views.gift_exchange.my_assignment, name='exchange-my-assignment'),
 
@@ -55,5 +71,7 @@ urlpatterns = [
     path('qattah/join/', views.qattah.join_qattah, name='qattah-join'),
     path('qattah/my-pledges/', views.qattah.my_pledges, name='qattah-my-pledges'),
     path('qattah/<int:qattah_id>/', views.qattah.qattah_detail, name='qattah-detail'),
+    path('qattah/<int:qattah_id>/accept/', views.qattah.accept_qattah_invitation, name='qattah-accept'),
+    path('qattah/<int:qattah_id>/reject/', views.qattah.reject_qattah_invitation, name='qattah-reject'),
     path('qattah/<int:qattah_id>/pledge/', views.qattah.make_pledge, name='qattah-pledge'),
 ]

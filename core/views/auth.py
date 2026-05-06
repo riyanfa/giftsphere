@@ -21,6 +21,7 @@ def request_otp(request):
     phone = request.data.get('phone')
     if not phone:
         return Response({"error": "Phone number is required"}, status=HTTP_400_BAD_REQUEST)
+    phone=phone[1:] if phone.startswith('0') else phone
     if not (phone.startswith('5') and len(phone) == 9):
         return Response({"error":"Wrong phone number"},status=HTTP_400_BAD_REQUEST)
 
@@ -52,7 +53,7 @@ def verify_otp(request):
     code = request.data.get('otp')
     if not phone or not code:
         return Response({"error": "Phone and OTP required"}, status=HTTP_400_BAD_REQUEST)
-
+    phone=phone[1:] if phone.startswith('0') else phone
     try:
         profile = Profile.objects.select_related('user').get(phone_number=phone)
         user = profile.user

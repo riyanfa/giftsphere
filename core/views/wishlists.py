@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import *
 
-from ..models import Wishlist, Product
+from ..models import Wishlist, Product, WishlistItem
 from ..serializers import WishlistSerializer
 
 
@@ -13,7 +13,9 @@ from ..serializers import WishlistSerializer
 def get_wishlist(request):
     wishlist = Wishlist.objects.filter(
         Q(user=request.user) | Q(shared=request.user)
-    ).select_related('user').prefetch_related('products', 'shared').distinct()
+    ).select_related('user').prefetch_related(
+        'products', 'items', 'items__product', 'shared'
+    ).distinct()
     serializer = WishlistSerializer(wishlist, many=True)
     return Response(serializer.data)
 
@@ -82,12 +84,12 @@ def add_to_wishlist(request):
             {"error": "Product not found."},
             status=HTTP_404_NOT_FOUND
         )
-    if wishlist.products.filter(id=product.id).exists():
+    if WishlistItem.objects.filter(wishlist=wishlist, product=product).exists():
         return Response(
             {"message": "Product is already in the wishlist."},
             status=HTTP_409_CONFLICT
         )
-    wishlist.products.add(product)
+    WishlistItem.objects.create(wishlist=wishlist, product=product)
     return Response(
         {"message": "Product successfully added."},
         status=HTTP_201_CREATED
@@ -110,12 +112,12 @@ def remove_from_wishlist(request):
             {"error": "Wishlist not found."},
             status=HTTP_404_NOT_FOUND
         )
-    if not wishlist.products.filter(id=product_id).exists():
+    deleted, _ = WishlistItem.objects.filter(wishlist=wishlist, product_id=product_id).delete()
+    if not deleted:
         return Response(
             {"error": "Product not in wishlist."},
             status=HTTP_404_NOT_FOUND
         )
-    wishlist.products.remove(product_id)
     return Response(
         {"message": "Product removed from wishlist."},
         status=HTTP_200_OK

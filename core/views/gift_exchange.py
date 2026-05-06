@@ -1,7 +1,10 @@
+from django.db import transaction
+from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from ..models import SecretGiftExchange, GiftAssignment
+
+from ..models import GiftAssignment, SecretGiftExchange, SecretGiftParticipant
 from ..serializers import SecretGiftExchangeSerializer, GiftAssignmentSerializer
 from ..notifications import notify_draw_completed
 
@@ -21,9 +24,19 @@ def list_exchanges(request):
     """
     exchanges = (
         SecretGiftExchange.objects
-        .filter(participants=request.user)
-        .prefetch_related('participants', 'participants__profile')
+        .filter(
+            participant_statuses__user=request.user,
+            participant_statuses__status__in=[
+                SecretGiftParticipant.STATUS_ACCEPTED,
+                SecretGiftParticipant.STATUS_INVITED,
+            ],
+        )
+        .prefetch_related(
+            'participants', 'participants__profile',
+            'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+        )
         .select_related('organizer', 'organizer__profile')
+        .distinct()
         .order_by('-created_at')
     )
     serializer = SecretGiftExchangeSerializer(exchanges, many=True)
@@ -44,14 +57,25 @@ def exchange_detail(request, exchange_id):
     try:
         exchange = (
             SecretGiftExchange.objects
-            .prefetch_related('participants', 'participants__profile')
+            .prefetch_related(
+                'participants', 'participants__profile',
+                'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+            )
             .select_related('organizer', 'organizer__profile')
             .get(id=exchange_id)
         )
     except SecretGiftExchange.DoesNotExist:
         return Response({'error': 'Exchange not found.'}, status=404)
 
-    if not exchange.participants.filter(id=request.user.id).exists():
+    can_view = (
+        exchange.organizer_id == request.user.id
+        or SecretGiftParticipant.objects.filter(
+            exchange=exchange,
+            user=request.user,
+            status__in=[SecretGiftParticipant.STATUS_ACCEPTED, SecretGiftParticipant.STATUS_INVITED],
+        ).exists()
+    )
+    if not can_view:
         return Response({'error': 'You are not a participant in this exchange.'}, status=403)
 
     data = SecretGiftExchangeSerializer(exchange).data
@@ -75,8 +99,12 @@ def create_exchange(request):
 
     if serializer.is_valid():
         exchange = serializer.save(organizer=request.user)
-        exchange.participants.add(request.user)  # organizer joins automatically
-        return Response(serializer.data)
+        SecretGiftParticipant.objects.create(
+            exchange=exchange,
+            user=request.user,
+            status=SecretGiftParticipant.STATUS_ACCEPTED,
+        )
+        return Response(SecretGiftExchangeSerializer(exchange).data)
 
     return Response(serializer.errors, status=400)
 
@@ -92,7 +120,10 @@ def join_exchange(request):
     try:
         exchange = (
             SecretGiftExchange.objects
-            .prefetch_related('participants', 'participants__profile')
+            .prefetch_related(
+                'participants', 'participants__profile',
+                'participant_statuses', 'participant_statuses__user', 'participant_statuses__user__profile',
+            )
             .select_related('organizer', 'organizer__profile')
             .get(invite_code=invite_code)
         )
@@ -102,7 +133,13 @@ def join_exchange(request):
     if exchange.status == 'COMPLETED':
         return Response({'error': 'This exchange is closed.'}, status=400)
 
-    if exchange.participants.filter(id=request.user.id).exists():
+    participant, created = SecretGiftParticipant.objects.get_or_create(
+        exchange=exchange,
+        user=request.user,
+        defaults={'status': SecretGiftParticipant.STATUS_ACCEPTED},
+    )
+
+    if not created and participant.status == SecretGiftParticipant.STATUS_ACCEPTED:
         return Response(
             {
                 'message': 'You already joined this exchange.',
@@ -110,7 +147,10 @@ def join_exchange(request):
             }
         )
 
-    exchange.participants.add(request.user)
+    if not created:
+        participant.status = SecretGiftParticipant.STATUS_ACCEPTED
+        participant.save(update_fields=['status', 'updated_at'])
+
     exchange.refresh_from_db()
 
     return Response(
@@ -123,41 +163,89 @@ def join_exchange(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def accept_exchange_invitation(request, exchange_id):
+    try:
+        participant = SecretGiftParticipant.objects.select_related('exchange').get(
+            exchange_id=exchange_id,
+            user=request.user,
+        )
+    except SecretGiftParticipant.DoesNotExist:
+        return Response({'error': 'Exchange invitation not found.'}, status=404)
+
+    if participant.exchange.status == 'COMPLETED':
+        return Response({'error': 'This exchange is closed.'}, status=400)
+
+    participant.status = SecretGiftParticipant.STATUS_ACCEPTED
+    participant.save(update_fields=['status', 'updated_at'])
+    return Response(
+        {
+            'message': 'Exchange invitation accepted.',
+            'exchange': SecretGiftExchangeSerializer(participant.exchange).data,
+        }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_exchange_invitation(request, exchange_id):
+    try:
+        participant = SecretGiftParticipant.objects.select_related('exchange').get(
+            exchange_id=exchange_id,
+            user=request.user,
+        )
+    except SecretGiftParticipant.DoesNotExist:
+        return Response({'error': 'Exchange invitation not found.'}, status=404)
+
+    participant.status = SecretGiftParticipant.STATUS_REJECTED
+    participant.save(update_fields=['status', 'updated_at'])
+    return Response(
+        {
+            'message': 'Exchange invitation rejected.',
+            'exchange': SecretGiftExchangeSerializer(participant.exchange).data,
+        }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def draw_assignments(request, exchange_id):
     try:
-        exchange = SecretGiftExchange.objects.get(id=exchange_id)
+        with transaction.atomic():
+            exchange = SecretGiftExchange.objects.select_for_update().get(id=exchange_id)
+
+            if exchange.organizer != request.user:
+                return Response({"error": "Only organizer can draw"}, status=403)
+
+            participants = list(
+                SecretGiftParticipant.objects
+                .filter(exchange=exchange, status=SecretGiftParticipant.STATUS_ACCEPTED)
+                .select_related('user')
+                .order_by('id')
+            )
+            users = [participant.user for participant in participants]
+
+            if len(users) < 2:
+                return Response({"error": "Not enough accepted participants"}, status=400)
+
+            receivers = users.copy()
+            random.shuffle(receivers)
+            if any(giver.id == receiver.id for giver, receiver in zip(users, receivers)):
+                receivers = users[1:] + users[:1]
+
+            GiftAssignment.objects.filter(exchange=exchange).delete()
+
+            for giver, receiver in zip(users, receivers):
+                GiftAssignment.objects.create(
+                    exchange=exchange,
+                    giver=giver,
+                    receiver=receiver,
+                )
+
+            exchange.status = 'ACTIVE'
+            exchange.draw_date = timezone.now()
+            exchange.save(update_fields=['status', 'draw_date'])
     except SecretGiftExchange.DoesNotExist:
         return Response({"error": "Exchange not found"}, status=404)
-
-    if exchange.organizer != request.user:
-        return Response({"error": "Only organizer can draw"}, status=403)
-
-    participants = list(exchange.participants.all())
-
-    if len(participants) < 2:
-        return Response({"error": "Not enough participants"}, status=400)
-
-    receivers = participants.copy()
-    random.shuffle(receivers)
-
-    # Ensure no one gets themselves
-    for i in range(len(participants)):
-        if participants[i] == receivers[i]:
-            receivers[i], receivers[(i+1) % len(receivers)] = receivers[(i+1) % len(receivers)], receivers[i]
-
-    # Clear old assignments
-    GiftAssignment.objects.filter(exchange=exchange).delete()
-
-    # Create new assignments
-    for giver, receiver in zip(participants, receivers):
-        GiftAssignment.objects.create(
-            exchange=exchange,
-            giver=giver,
-            receiver=receiver
-        )
-
-    exchange.status = 'ACTIVE'
-    exchange.save()
 
     # Notify all participants that the draw is done
     notify_draw_completed(exchange)
