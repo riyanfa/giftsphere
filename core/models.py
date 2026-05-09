@@ -7,7 +7,7 @@ from django.utils.crypto import get_random_string
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone_number = models.CharField(max_length=15, unique=True,db_index=True)
-    otp_code = models.CharField(max_length=6, blank=True, null=True)
+    otp_code = models.CharField(max_length=128, blank=True, null=True)
     otp_attempts = models.IntegerField(default=0)
     otp_created_at = models.DateTimeField(null=True, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)  # Added for UI
