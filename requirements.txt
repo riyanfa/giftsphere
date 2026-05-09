@@ -6,3 +6,8 @@ drf-spectacular
 Pillow
 firebase-admin
 fcm-django
+gunicorn
+psycopg2-binary
+dj-database-url
+python-decouple
+whitenoise

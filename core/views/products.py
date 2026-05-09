@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 
+from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.pagination import LimitOffsetPagination
@@ -56,57 +57,63 @@ def get_products(request):
     List products with optional filtering.
 
     Query params:
-      ?search=playstation   — case-insensitive match on name or description
-      ?category=3           — filter by category ID
+      ?search=playstation   - full-text search on product browsing fields
+      ?category=3           - filter by category ID
+      ?category=Electronics - filter by category name
+      ?budget_min=100       - minimum product price
+      ?budget_max=400       - maximum product price
     """
-    qs = Product.objects.filter(is_active=True).select_related('category').order_by('id')
+    qs = Product.objects.filter(is_active=True).select_related('category')
 
     search = request.query_params.get('search', '').strip()
     category = request.query_params.get('category', '').strip()
-    occasion = request.query_params.get('occasion', '').strip()
-    target_gender = request.query_params.get('target_gender', '').strip()
-    recipient_age = request.query_params.get('recipient_age', '').strip()
     budget_min = request.query_params.get('budget_min', '').strip()
     budget_max = request.query_params.get('budget_max', '').strip()
-    interests = request.query_params.get('interests', '').strip()
 
     if search:
-        qs = qs.filter(Q(name__icontains=search) | Q(description__icontains=search))
+        search_vector = (
+            SearchVector('name', weight='A')
+            + SearchVector('category__name', weight='A')
+            + SearchVector('interests', weight='B')
+            + SearchVector('occasion', weight='B')
+            + SearchVector('description', weight='C')
+            + SearchVector('store_name', weight='D')
+        )
+        search_query = SearchQuery(search, search_type='websearch')
+        qs = (
+            qs
+            .annotate(search_vector=search_vector, rank=SearchRank(search_vector, search_query))
+            .filter(search_vector=search_query)
+        )
 
     if category:
-        try:
+        if category.isdecimal():
             qs = qs.filter(category_id=int(category))
-        except ValueError:
-            return Response({'error': 'category must be a valid integer ID.'}, status=400)
-
-    if occasion:
-        qs = qs.filter(occasion__iexact=occasion)
-
-    if target_gender:
-        qs = qs.filter(target_gender__iexact=target_gender)
-
-    if recipient_age:
-        try:
-            age = int(recipient_age)
-        except ValueError:
-            return Response({'error': 'recipient_age must be a valid integer.'}, status=400)
-        qs = qs.filter(Q(min_age__isnull=True) | Q(min_age__lte=age))
-        qs = qs.filter(Q(max_age__isnull=True) | Q(max_age__gte=age))
+        else:
+            qs = qs.filter(category__name__iexact=category)
 
     if budget_min:
         try:
-            qs = qs.filter(price__gte=Decimal(budget_min))
+            min_price = Decimal(budget_min)
         except InvalidOperation:
             return Response({'error': 'budget_min must be a valid number.'}, status=400)
+        if not min_price.is_finite():
+            return Response({'error': 'budget_min must be a valid number.'}, status=400)
+        qs = qs.filter(price__gte=min_price)
 
     if budget_max:
         try:
-            qs = qs.filter(price__lte=Decimal(budget_max))
+            max_price = Decimal(budget_max)
         except InvalidOperation:
             return Response({'error': 'budget_max must be a valid number.'}, status=400)
+        if not max_price.is_finite():
+            return Response({'error': 'budget_max must be a valid number.'}, status=400)
+        qs = qs.filter(price__lte=max_price)
 
-    if interests:
-        qs = qs.filter(interests__icontains=interests)
+    if search:
+        qs = qs.order_by('-rank', 'id')
+    else:
+        qs = qs.order_by('id')
 
     paginator = LimitOffsetPagination()
     paginator.default_limit = 10

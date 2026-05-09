@@ -564,6 +564,7 @@ class ProductAffiliateQuizTests(APITestCase):
         self.user = User.objects.create_user(username="product-user")
         self.client.force_authenticate(self.user)
         self.category = Category.objects.create(name="Toys", icon="gift")
+        self.electronics_category = Category.objects.create(name="Electronics", icon="headphones")
         self.matching_product = Product.objects.create(
             name="Birthday LEGO Set",
             category=self.category,
@@ -603,6 +604,21 @@ class ProductAffiliateQuizTests(APITestCase):
             store_name="Amazon SA",
             is_active=True,
         )
+        self.electronics_product = Product.objects.create(
+            name="Gaming Headphones",
+            category=self.electronics_category,
+            price="250.00",
+            description="Wireless headset with immersive sound",
+            image_url="https://example.com/headphones.jpg",
+            affiliate_link="https://example.com/headphones",
+            store_name="Noon",
+            occasion="graduation",
+            interests="gaming, music",
+            is_active=True,
+        )
+
+    def _product_ids(self, response):
+        return [product["id"] for product in response.data["results"]]
 
     def test_get_products_returns_only_active_products_by_default(self):
         response = self.client.get("/api/products/")
@@ -611,6 +627,52 @@ class ProductAffiliateQuizTests(APITestCase):
         names = [item["name"] for item in response.data["results"]]
         self.assertIn(self.matching_product.name, names)
         self.assertNotIn(self.inactive_product.name, names)
+
+    def test_get_products_searches_by_product_name(self):
+        response = self.client.get("/api/products/", {"search": "headphones"})
+
+        self.assertEqual(response.status_code, 200)
+        product_ids = self._product_ids(response)
+        self.assertIn(self.electronics_product.id, product_ids)
+        self.assertNotIn(self.matching_product.id, product_ids)
+
+    def test_get_products_searches_by_category_name(self):
+        response = self.client.get("/api/products/", {"search": "Electronics"})
+
+        self.assertEqual(response.status_code, 200)
+        product_ids = self._product_ids(response)
+        self.assertIn(self.electronics_product.id, product_ids)
+        self.assertNotIn(self.matching_product.id, product_ids)
+
+    def test_get_products_filters_by_category_id(self):
+        response = self.client.get("/api/products/", {"category": str(self.electronics_category.id)})
+
+        self.assertEqual(response.status_code, 200)
+        product_ids = self._product_ids(response)
+        self.assertEqual(product_ids, [self.electronics_product.id])
+
+    def test_get_products_filters_by_category_name(self):
+        response = self.client.get("/api/products/", {"category": "Electronics"})
+
+        self.assertEqual(response.status_code, 200)
+        product_ids = self._product_ids(response)
+        self.assertEqual(product_ids, [self.electronics_product.id])
+
+    def test_get_products_filters_by_budget_range(self):
+        response = self.client.get("/api/products/", {"budget_min": "100", "budget_max": "200"})
+
+        self.assertEqual(response.status_code, 200)
+        product_ids = self._product_ids(response)
+        self.assertIn(self.matching_product.id, product_ids)
+        self.assertNotIn(self.no_collection_product.id, product_ids)
+        self.assertNotIn(self.electronics_product.id, product_ids)
+        self.assertNotIn(self.inactive_product.id, product_ids)
+
+    def test_get_products_rejects_invalid_budget(self):
+        response = self.client.get("/api/products/", {"budget_min": "not-a-number"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "budget_min must be a valid number.")
 
     def test_affiliate_click_endpoint_creates_click_and_returns_link(self):
         response = self.client.post(f"/api/products/{self.matching_product.id}/affiliate-click/")

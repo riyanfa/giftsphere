@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-giftsphere}
+      POSTGRES_USER: ${POSTGRES_USER:-giftsphere}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-giftsphere} -d ${POSTGRES_DB:-giftsphere}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://giftsphere:change-me@db:5432/giftsphere}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - ${MEDIA_DIR:-./data/media}:/app/media
+      - ${STATICFILES_DIR:-./data/staticfiles}:/app/staticfiles
+      # Optional Firebase credentials for push notifications:
+      # - ${FIREBASE_CREDENTIALS_PATH_HOST:-./firebase-credentials.json}:/app/firebase-credentials.json:ro
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn giftsphere.wsgi:application --bind 0.0.0.0:8000 --workers 3"
