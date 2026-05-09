@@ -13,6 +13,7 @@ Edit `.env` and set at least:
 ```env
 SECRET_KEY=django-insecure-exam-demo-key-7q3u5z9v2n4p8r1s6t0w
 DEBUG=False
+SERVER=False
 ALLOWED_HOSTS=localhost,127.0.0.1
 CSRF_TRUSTED_ORIGINS=http://localhost:8000
 POSTGRES_PASSWORD=your-db-password
@@ -48,3 +49,5 @@ http://localhost:8000/api/products/
 ```
 
 The root URL `/` may return `404 Not Found` because this project is an API backend.
+
+Set `SERVER=True` only when running behind an HTTPS reverse proxy that sends `X-Forwarded-Proto`.
