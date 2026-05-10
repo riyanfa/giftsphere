@@ -197,6 +197,50 @@ class GiftExchangeTests(APITestCase):
             ).exists()
         )
 
+    def test_leave_exchange_marks_participant_left_and_hides_from_list(self):
+        self._authenticate("512300040")
+        create = self.client.post("/api/exchange/create/", {"title": "Leave Test"}, format="json")
+        exchange_id = create.data["id"]
+
+        self._authenticate("512300041")
+        self.client.post("/api/exchange/join/", {"invite_code": create.data["invite_code"]}, format="json")
+        response = self.client.post(f"/api/exchange/{exchange_id}/leave/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["message"], "Left exchange successfully.")
+        participant = SecretGiftParticipant.objects.get(exchange_id=exchange_id, user__username="512300041")
+        self.assertEqual(participant.status, SecretGiftParticipant.STATUS_LEFT)
+
+        list_response = self.client.get("/api/exchange/")
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data, [])
+
+    def test_exchange_organizer_cannot_leave(self):
+        self._authenticate("512300042")
+        create = self.client.post("/api/exchange/create/", {"title": "Organizer Leave"}, format="json")
+
+        response = self.client.post(f"/api/exchange/{create.data['id']}/leave/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "Organizer cannot leave their own exchange.")
+
+    def test_exchange_participant_cannot_leave_after_draw(self):
+        self._authenticate("512300043")
+        create = self.client.post("/api/exchange/create/", {"title": "Drawn Leave"}, format="json")
+        exchange_id = create.data["id"]
+
+        self._authenticate("512300044")
+        self.client.post("/api/exchange/join/", {"invite_code": create.data["invite_code"]}, format="json")
+
+        self._authenticate("512300043")
+        self.client.post(f"/api/exchange/{exchange_id}/draw/")
+
+        self._authenticate("512300044")
+        response = self.client.post(f"/api/exchange/{exchange_id}/leave/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "You cannot leave after assignments have been drawn.")
+
     def test_draw_assignments(self):
         # Organizer
         self._authenticate("512300003")
@@ -415,6 +459,66 @@ class QattahJoinTests(APITestCase):
                 status=GroupGiftParticipant.STATUS_ACCEPTED,
             ).exists()
         )
+
+    def test_leave_qattah_marks_participant_left(self):
+        self._authenticate("512399017")
+        create_response = self.client.post(
+            "/api/qattah/create/",
+            {"title": "Leave Qattah", "product_id": self.product.id},
+            format="json",
+        )
+
+        self._authenticate("512399018")
+        self.client.post("/api/qattah/join/", {"invite_code": create_response.data["invite_code"]}, format="json")
+        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["message"], "Left Qattah successfully.")
+        participant = GroupGiftParticipant.objects.get(
+            group_gift_id=create_response.data["id"],
+            user__username="512399018",
+        )
+        self.assertEqual(participant.status, GroupGiftParticipant.STATUS_LEFT)
+
+        pledge_response = self.client.post(
+            f"/api/qattah/{create_response.data['id']}/pledge/",
+            {"amount": "10.00"},
+            format="json",
+        )
+        self.assertEqual(pledge_response.status_code, 403)
+
+    def test_qattah_organizer_cannot_leave(self):
+        self._authenticate("512399019")
+        create_response = self.client.post(
+            "/api/qattah/create/",
+            {"title": "Organizer Qattah", "product_id": self.product.id},
+            format="json",
+        )
+
+        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "Organizer cannot leave their own Qattah.")
+
+    def test_qattah_participant_cannot_leave_after_pledging(self):
+        self._authenticate("512399020")
+        create_response = self.client.post(
+            "/api/qattah/create/",
+            {"title": "Pledged Qattah", "product_id": self.product.id},
+            format="json",
+        )
+
+        self._authenticate("512399021")
+        self.client.post("/api/qattah/join/", {"invite_code": create_response.data["invite_code"]}, format="json")
+        self.client.post(
+            f"/api/qattah/{create_response.data['id']}/pledge/",
+            {"amount": "10.00"},
+            format="json",
+        )
+        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["error"], "You cannot leave after pledging to this Qattah.")
 
     def test_rejected_participant_cannot_pledge(self):
         self._authenticate("512399004")

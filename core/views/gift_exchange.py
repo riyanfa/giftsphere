@@ -208,6 +208,45 @@ def reject_exchange_invitation(request, exchange_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+def leave_exchange(request, exchange_id):
+    try:
+        participant = (
+            SecretGiftParticipant.objects
+            .select_related('exchange')
+            .get(exchange_id=exchange_id, user=request.user)
+        )
+    except SecretGiftParticipant.DoesNotExist:
+        return Response({'error': 'Exchange participation not found.'}, status=404)
+
+    exchange = participant.exchange
+
+    if exchange.organizer_id == request.user.id:
+        return Response({'error': 'Organizer cannot leave their own exchange.'}, status=400)
+
+    if exchange.status != 'PENDING':
+        return Response({'error': 'You cannot leave after assignments have been drawn.'}, status=400)
+
+    if participant.status == SecretGiftParticipant.STATUS_LEFT:
+        return Response(
+            {
+                'message': 'You already left this exchange.',
+                'exchange': SecretGiftExchangeSerializer(exchange).data,
+            }
+        )
+
+    participant.status = SecretGiftParticipant.STATUS_LEFT
+    participant.save(update_fields=['status', 'updated_at'])
+
+    return Response(
+        {
+            'message': 'Left exchange successfully.',
+            'exchange': SecretGiftExchangeSerializer(exchange).data,
+        }
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def draw_assignments(request, exchange_id):
     try:
         with transaction.atomic():

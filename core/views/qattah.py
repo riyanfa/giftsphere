@@ -215,6 +215,48 @@ def reject_qattah_invitation(request, qattah_id):
     )
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def leave_qattah(request, qattah_id):
+    try:
+        participant = (
+            GroupGiftParticipant.objects
+            .select_related('group_gift')
+            .get(group_gift_id=qattah_id, user=request.user)
+        )
+    except GroupGiftParticipant.DoesNotExist:
+        return Response({'error': 'Qattah participation not found.'}, status=404)
+
+    group_gift = participant.group_gift
+
+    if group_gift.organizer_id == request.user.id:
+        return Response({'error': 'Organizer cannot leave their own Qattah.'}, status=400)
+
+    if group_gift.status != 'ACTIVE':
+        return Response({'error': 'This Qattah is not open for leaving.'}, status=400)
+
+    if Pledge.objects.filter(group_gift=group_gift, user=request.user).exists():
+        return Response({'error': 'You cannot leave after pledging to this Qattah.'}, status=400)
+
+    if participant.status == GroupGiftParticipant.STATUS_LEFT:
+        return Response(
+            {
+                'message': 'You already left this Qattah.',
+                'qattah': GroupGiftSerializer(group_gift, context={'request': request}).data,
+            }
+        )
+
+    participant.status = GroupGiftParticipant.STATUS_LEFT
+    participant.save(update_fields=['status', 'updated_at'])
+
+    return Response(
+        {
+            'message': 'Left Qattah successfully.',
+            'qattah': GroupGiftSerializer(group_gift, context={'request': request}).data,
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # 5. PLEDGE — contribute to a Qattah
 #    POST /qattah/<id>/pledge/

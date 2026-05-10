@@ -212,10 +212,12 @@ class SecretGiftParticipant(models.Model):
     STATUS_INVITED = 'INVITED'
     STATUS_ACCEPTED = 'ACCEPTED'
     STATUS_REJECTED = 'REJECTED'
+    STATUS_LEFT = 'LEFT'
     STATUS_CHOICES = [
         (STATUS_INVITED, 'Invited'),
         (STATUS_ACCEPTED, 'Accepted'),
         (STATUS_REJECTED, 'Rejected'),
+        (STATUS_LEFT, 'Left'),
     ]
 
     exchange = models.ForeignKey(

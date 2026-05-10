@@ -56,6 +56,7 @@ urlpatterns = [
     path('exchange/<int:exchange_id>/', views.gift_exchange.exchange_detail, name='exchange-detail'),
     path('exchange/<int:exchange_id>/accept/', views.gift_exchange.accept_exchange_invitation, name='exchange-accept'),
     path('exchange/<int:exchange_id>/reject/', views.gift_exchange.reject_exchange_invitation, name='exchange-reject'),
+    path('exchange/<int:exchange_id>/leave/', views.gift_exchange.leave_exchange, name='exchange-leave'),
     path('exchange/<int:exchange_id>/draw/', views.gift_exchange.draw_assignments, name='exchange-draw'),
     path('exchange/<int:exchange_id>/my/', views.gift_exchange.my_assignment, name='exchange-my-assignment'),
 
@@ -73,5 +74,6 @@ urlpatterns = [
     path('qattah/<int:qattah_id>/', views.qattah.qattah_detail, name='qattah-detail'),
     path('qattah/<int:qattah_id>/accept/', views.qattah.accept_qattah_invitation, name='qattah-accept'),
     path('qattah/<int:qattah_id>/reject/', views.qattah.reject_qattah_invitation, name='qattah-reject'),
+    path('qattah/<int:qattah_id>/leave/', views.qattah.leave_qattah, name='qattah-leave'),
     path('qattah/<int:qattah_id>/pledge/', views.qattah.make_pledge, name='qattah-pledge'),
 ]

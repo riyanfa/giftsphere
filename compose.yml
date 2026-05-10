@@ -2,14 +2,12 @@ services:
   db:
     image: postgres:16
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-giftsphere}
-      POSTGRES_USER: ${POSTGRES_USER:-giftsphere}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    env_file:
+      - .env
     volumes:
       - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-giftsphere} -d ${POSTGRES_DB:-giftsphere}"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,7 +18,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://giftsphere:change-me@db:5432/giftsphere}
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://giftsphere:change-me@db:5432/giftsphere}
     depends_on:
       db:
         condition: service_healthy
