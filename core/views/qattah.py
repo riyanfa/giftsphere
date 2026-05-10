@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import GroupGift, GroupGiftParticipant, Pledge, Product
-from ..serializers import GroupGiftSerializer, PledgeSerializer
+from ..serializers import GroupGiftSerializer, PledgeSerializer, PaymentInfoSerializer
 from ..notifications import notify_pledge_received, notify_qattah_completed
 
 
@@ -26,9 +26,17 @@ def create_qattah(request):
     product_id = request.data.get('product_id')
     title = request.data.get('title', '').strip()
     payment_method_note = request.data.get('payment_method_note', '').strip()
+    profile = request.user.profile
+
+    if not profile.bank_name or not profile.iban or not profile.account_holder_name:
+        return Response(
+            {'error': 'Complete your banking information before creating a Qattah.'},
+            status=400
+        )
 
     if not product_id:
         return Response({'error': 'product_id is required.'}, status=400)
+
 
     try:
         product = Product.objects.get(id=product_id)
@@ -107,8 +115,15 @@ def qattah_detail(request, qattah_id):
     except GroupGift.DoesNotExist:
         return Response({'error': 'Qattah not found.'}, status=404)
 
+    # Expose organizer banking info only in qattah details for privacy
     serializer = GroupGiftSerializer(group_gift, context={'request': request})
-    return Response(serializer.data)
+
+    data = serializer.data
+
+    payment_serializer = PaymentInfoSerializer(group_gift.organizer.profile)
+    data['payment_info'] = payment_serializer.data
+
+    return Response(data)
 
 
 # ---------------------------------------------------------------------------

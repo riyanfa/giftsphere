@@ -10,6 +10,7 @@ urlpatterns = [
     # ── Profile ───────────────────────────────────────────────────────────────
     path('profile/me/', views.get_current_user),
     path('setname/', views.set_full_name),
+    path('update_profile/', views.update_profile),
 
     # ── Contacts ──────────────────────────────────────────────────────────────
     path('contacts/sync/', views.util_views.send_contacts, name='sync-contacts'),

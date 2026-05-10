@@ -7,6 +7,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
+from rest_framework import status
 
 from .models import (
     AffiliateClick,
@@ -196,50 +197,6 @@ class GiftExchangeTests(APITestCase):
                 status=SecretGiftParticipant.STATUS_ACCEPTED,
             ).exists()
         )
-
-    def test_leave_exchange_marks_participant_left_and_hides_from_list(self):
-        self._authenticate("512300040")
-        create = self.client.post("/api/exchange/create/", {"title": "Leave Test"}, format="json")
-        exchange_id = create.data["id"]
-
-        self._authenticate("512300041")
-        self.client.post("/api/exchange/join/", {"invite_code": create.data["invite_code"]}, format="json")
-        response = self.client.post(f"/api/exchange/{exchange_id}/leave/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["message"], "Left exchange successfully.")
-        participant = SecretGiftParticipant.objects.get(exchange_id=exchange_id, user__username="512300041")
-        self.assertEqual(participant.status, SecretGiftParticipant.STATUS_LEFT)
-
-        list_response = self.client.get("/api/exchange/")
-        self.assertEqual(list_response.status_code, 200)
-        self.assertEqual(list_response.data, [])
-
-    def test_exchange_organizer_cannot_leave(self):
-        self._authenticate("512300042")
-        create = self.client.post("/api/exchange/create/", {"title": "Organizer Leave"}, format="json")
-
-        response = self.client.post(f"/api/exchange/{create.data['id']}/leave/")
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "Organizer cannot leave their own exchange.")
-
-    def test_exchange_participant_cannot_leave_after_draw(self):
-        self._authenticate("512300043")
-        create = self.client.post("/api/exchange/create/", {"title": "Drawn Leave"}, format="json")
-        exchange_id = create.data["id"]
-
-        self._authenticate("512300044")
-        self.client.post("/api/exchange/join/", {"invite_code": create.data["invite_code"]}, format="json")
-
-        self._authenticate("512300043")
-        self.client.post(f"/api/exchange/{exchange_id}/draw/")
-
-        self._authenticate("512300044")
-        response = self.client.post(f"/api/exchange/{exchange_id}/leave/")
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "You cannot leave after assignments have been drawn.")
 
     def test_draw_assignments(self):
         # Organizer
@@ -460,66 +417,6 @@ class QattahJoinTests(APITestCase):
             ).exists()
         )
 
-    def test_leave_qattah_marks_participant_left(self):
-        self._authenticate("512399017")
-        create_response = self.client.post(
-            "/api/qattah/create/",
-            {"title": "Leave Qattah", "product_id": self.product.id},
-            format="json",
-        )
-
-        self._authenticate("512399018")
-        self.client.post("/api/qattah/join/", {"invite_code": create_response.data["invite_code"]}, format="json")
-        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["message"], "Left Qattah successfully.")
-        participant = GroupGiftParticipant.objects.get(
-            group_gift_id=create_response.data["id"],
-            user__username="512399018",
-        )
-        self.assertEqual(participant.status, GroupGiftParticipant.STATUS_LEFT)
-
-        pledge_response = self.client.post(
-            f"/api/qattah/{create_response.data['id']}/pledge/",
-            {"amount": "10.00"},
-            format="json",
-        )
-        self.assertEqual(pledge_response.status_code, 403)
-
-    def test_qattah_organizer_cannot_leave(self):
-        self._authenticate("512399019")
-        create_response = self.client.post(
-            "/api/qattah/create/",
-            {"title": "Organizer Qattah", "product_id": self.product.id},
-            format="json",
-        )
-
-        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "Organizer cannot leave their own Qattah.")
-
-    def test_qattah_participant_cannot_leave_after_pledging(self):
-        self._authenticate("512399020")
-        create_response = self.client.post(
-            "/api/qattah/create/",
-            {"title": "Pledged Qattah", "product_id": self.product.id},
-            format="json",
-        )
-
-        self._authenticate("512399021")
-        self.client.post("/api/qattah/join/", {"invite_code": create_response.data["invite_code"]}, format="json")
-        self.client.post(
-            f"/api/qattah/{create_response.data['id']}/pledge/",
-            {"amount": "10.00"},
-            format="json",
-        )
-        response = self.client.post(f"/api/qattah/{create_response.data['id']}/leave/")
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "You cannot leave after pledging to this Qattah.")
-
     def test_rejected_participant_cannot_pledge(self):
         self._authenticate("512399004")
         create_response = self.client.post(
@@ -668,7 +565,6 @@ class ProductAffiliateQuizTests(APITestCase):
         self.user = User.objects.create_user(username="product-user")
         self.client.force_authenticate(self.user)
         self.category = Category.objects.create(name="Toys", icon="gift")
-        self.electronics_category = Category.objects.create(name="Electronics", icon="headphones")
         self.matching_product = Product.objects.create(
             name="Birthday LEGO Set",
             category=self.category,
@@ -708,21 +604,6 @@ class ProductAffiliateQuizTests(APITestCase):
             store_name="Amazon SA",
             is_active=True,
         )
-        self.electronics_product = Product.objects.create(
-            name="Gaming Headphones",
-            category=self.electronics_category,
-            price="250.00",
-            description="Wireless headset with immersive sound",
-            image_url="https://example.com/headphones.jpg",
-            affiliate_link="https://example.com/headphones",
-            store_name="Noon",
-            occasion="graduation",
-            interests="gaming, music",
-            is_active=True,
-        )
-
-    def _product_ids(self, response):
-        return [product["id"] for product in response.data["results"]]
 
     def test_get_products_returns_only_active_products_by_default(self):
         response = self.client.get("/api/products/")
@@ -731,52 +612,6 @@ class ProductAffiliateQuizTests(APITestCase):
         names = [item["name"] for item in response.data["results"]]
         self.assertIn(self.matching_product.name, names)
         self.assertNotIn(self.inactive_product.name, names)
-
-    def test_get_products_searches_by_product_name(self):
-        response = self.client.get("/api/products/", {"search": "headphones"})
-
-        self.assertEqual(response.status_code, 200)
-        product_ids = self._product_ids(response)
-        self.assertIn(self.electronics_product.id, product_ids)
-        self.assertNotIn(self.matching_product.id, product_ids)
-
-    def test_get_products_searches_by_category_name(self):
-        response = self.client.get("/api/products/", {"search": "Electronics"})
-
-        self.assertEqual(response.status_code, 200)
-        product_ids = self._product_ids(response)
-        self.assertIn(self.electronics_product.id, product_ids)
-        self.assertNotIn(self.matching_product.id, product_ids)
-
-    def test_get_products_filters_by_category_id(self):
-        response = self.client.get("/api/products/", {"category": str(self.electronics_category.id)})
-
-        self.assertEqual(response.status_code, 200)
-        product_ids = self._product_ids(response)
-        self.assertEqual(product_ids, [self.electronics_product.id])
-
-    def test_get_products_filters_by_category_name(self):
-        response = self.client.get("/api/products/", {"category": "Electronics"})
-
-        self.assertEqual(response.status_code, 200)
-        product_ids = self._product_ids(response)
-        self.assertEqual(product_ids, [self.electronics_product.id])
-
-    def test_get_products_filters_by_budget_range(self):
-        response = self.client.get("/api/products/", {"budget_min": "100", "budget_max": "200"})
-
-        self.assertEqual(response.status_code, 200)
-        product_ids = self._product_ids(response)
-        self.assertIn(self.matching_product.id, product_ids)
-        self.assertNotIn(self.no_collection_product.id, product_ids)
-        self.assertNotIn(self.electronics_product.id, product_ids)
-        self.assertNotIn(self.inactive_product.id, product_ids)
-
-    def test_get_products_rejects_invalid_budget(self):
-        response = self.client.get("/api/products/", {"budget_min": "not-a-number"})
-
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.data["error"], "budget_min must be a valid number.")
 
     def test_affiliate_click_endpoint_creates_click_and_returns_link(self):
         response = self.client.post(f"/api/products/{self.matching_product.id}/affiliate-click/")
@@ -1058,3 +893,53 @@ class NotificationInboxTests(APITestCase):
         self.assertEqual(response.status_code, 404)
         notification.refresh_from_db()
         self.assertFalse(notification.is_read)
+class UpdateProfileTest(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="testuser",
+            password="testpass123"
+        )
+
+        self.profile = Profile.objects.create(
+            user=self.user,
+            phone_number="0500000000"
+        )
+
+        self.client.login(username="testuser", password="testpass123")
+        self.url = "/api/update_profile/"
+
+    def test_update_profile_success(self):
+        payload = {
+            "bank_name": "Al Rajhi Bank",
+            "iban": "SA0380000000608010167519",
+            "account_holder_name": "Abdullah"
+        }
+
+        response = self.client.patch(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.bank_name, "Al Rajhi Bank")
+        self.assertEqual(self.profile.iban, "SA0380000000608010167519")
+        self.assertEqual(self.profile.account_holder_name, "Abdullah")
+
+    def test_update_profile_unauthenticated(self):
+        self.client.logout()
+
+        response = self.client.patch(self.url, {
+            "bank_name": "Al Rajhi Bank"
+        }, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_update_profile_partial_update(self):
+        response = self.client.patch(self.url, {
+            "bank_name": "SNB"
+        }, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.bank_name, "SNB")

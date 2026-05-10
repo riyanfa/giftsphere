@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.status import *
 from ..models import Profile
-from ..serializers import UserSerializer
+from ..serializers import UserSerializer,UpdateProfileSerializer
 
 
 @api_view(['POST'])
@@ -19,6 +19,26 @@ def set_full_name(request):
     user.last_name = last_name
     user.save()
     return Response({"message": "Name updated successfully"})
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    profile = request.user.profile
+
+    serializer = UpdateProfileSerializer(
+        profile,
+        data=request.data,
+        partial=True
+    )
+
+    if serializer.is_valid():
+        serializer.save()
+        return Response({
+            "message": "Profile updated successfully",
+            "profile": serializer.data
+        })
+
+    return Response(serializer.errors, status=400)
 
 
 @api_view(['GET'])

@@ -12,6 +12,11 @@ class Profile(models.Model):
     otp_created_at = models.DateTimeField(null=True, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)  # Added for UI
 
+    #Bank info
+    bank_name = models.CharField(max_length=100, blank=True)
+    iban = models.CharField(max_length=24, blank=True)
+    account_holder_name = models.CharField(max_length=100, blank=True)
+
     def __str__(self):
         return self.phone_number
 

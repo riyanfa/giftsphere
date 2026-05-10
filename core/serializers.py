@@ -14,6 +14,7 @@ from .models import (
     SecretGiftParticipant,
     Wishlist,
     WishlistItem,
+    Profile
 )
 
 
@@ -28,7 +29,11 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'phone_number', 'avatar']
+        fields = ['id',
+                  'first_name',
+                  'last_name',
+                  'phone_number',
+                  'avatar']
 
     def get_phone_number(self, obj):
         return obj.profile.phone_number if hasattr(obj, 'profile') else None
@@ -41,6 +46,14 @@ class UserSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(url)
             return url  # fallback: relative path
         return None
+class UpdateProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = [
+            'bank_name',
+            'iban',
+            'account_holder_name',
+        ]
 class PledgeSerializer(serializers.ModelSerializer):
     """Serializer for individual pledges inside a Qattah."""
     user = UserSerializer(read_only=True)
@@ -128,6 +141,15 @@ class GroupGiftSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         delta = obj.deadline - timezone.now()
         return max(delta.days, 0)
+
+class PaymentInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = [
+            'bank_name',
+            'iban',
+            'account_holder_name',
+        ]
 
 class WishlistItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)

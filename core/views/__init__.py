@@ -2,7 +2,7 @@
 from .auth import request_otp, verify_otp
 from .products import get_products, get_product_detail
 from .wishlists import get_wishlist, delete_wishlist
-from .util_views import get_current_user, set_full_name
+from .util_views import get_current_user, set_full_name,update_profile
 from .gift_exchange import (
     create_exchange, join_exchange, draw_assignments, my_assignment,
     list_exchanges, exchange_detail,
