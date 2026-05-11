@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import GiftAssignment, SecretGiftExchange, SecretGiftParticipant
+from ..models import GiftAssignment, SecretGiftExchange, SecretGiftParticipant,Wishlist
 from ..serializers import SecretGiftExchangeSerializer, GiftAssignmentSerializer
 from ..notifications import notify_draw_completed
 
@@ -279,6 +279,11 @@ def draw_assignments(request, exchange_id):
                     giver=giver,
                     receiver=receiver,
                 )
+
+                # Share the receiver's wishlists with the assigned giver
+                receiver_wishlists = Wishlist.objects.filter(user=receiver)
+                for wishlist in receiver_wishlists:
+                    wishlist.shared.add(giver)
 
             exchange.status = 'ACTIVE'
             exchange.draw_date = timezone.now()
