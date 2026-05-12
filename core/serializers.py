@@ -24,16 +24,24 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class UserSerializer(serializers.ModelSerializer):
-    phone_number = serializers.SerializerMethodField(method_name="get_phone_number")
-    avatar = serializers.SerializerMethodField(method_name="get_avatar")
+    phone_number = serializers.CharField(source='profile.phone_number', read_only=True)
+    avatar = serializers.ImageField(source='profile.avatar', read_only=True)
+    bank_name = serializers.CharField(source='profile.bank_name', read_only=True)
+    iban = serializers.CharField(source='profile.iban', read_only=True)
+    account_holder_name = serializers.CharField(source='profile.account_holder_name', read_only=True)
 
     class Meta:
         model = User
-        fields = ['id',
-                  'first_name',
-                  'last_name',
-                  'phone_number',
-                  'avatar']
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'phone_number',
+            'avatar',
+            'bank_name',
+            'iban',
+            'account_holder_name',
+        ]
 
     def get_phone_number(self, obj):
         return obj.profile.phone_number if hasattr(obj, 'profile') else None
